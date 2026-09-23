@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DataReplay · 数据回放</title>
+  <style>
+    :root{color-scheme:dark;--bg:#071019;--panel:#101c28;--panel2:#0b1620;--line:#24394b;--text:#eef7ff;--muted:#8fa5b8;--green:#43ddb0;--orange:#ffb15c;--red:#ff7b85;--blue:#6ab8ff}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 12% -5%,#1b4059 0,transparent 30%),var(--bg);font:14px/1.45 system-ui,-apple-system,sans-serif;color:var(--text)}
+    header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:1px solid var(--line);background:#08131de8;backdrop-filter:blur(12px)}h1{font-size:19px;margin:0}.status{color:var(--green)}.error{color:var(--red)}
+    main{padding:18px 24px 44px;max-width:1900px;margin:auto}.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-bottom:15px;overflow:hidden}.toolbar{display:flex;gap:11px;align-items:end;flex-wrap:wrap;padding:14px}.grow{flex:1;min-width:240px}
+    label{display:grid;gap:5px;color:var(--muted);font-size:12px}select,input,button{height:38px;border:1px solid var(--line);border-radius:8px;background:#09141e;color:var(--text);padding:0 11px}select{max-width:460px}button{cursor:pointer}button:hover{border-color:var(--green)}input[type=range]{padding:0;min-width:220px}.stats{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:10px;padding:0 14px 14px}.stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}.stat span{display:block;color:var(--muted);font-size:11px}.stat b{font-size:17px;font-weight:650}.path{padding:0 14px 13px;color:var(--muted);font:12px ui-monospace,monospace;overflow-wrap:anywhere}
+    .videos{display:grid;grid-template-columns:2fr 1fr 1fr;gap:13px;margin-bottom:15px}.video-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}.video-card h2{font-size:13px;margin:0;padding:10px 13px;border-bottom:1px solid var(--line);color:#d2e3f1}.video-card video{display:block;width:100%;background:#000;aspect-ratio:4/3}.video-card:first-child video{aspect-ratio:16/9}.empty{padding:42px;text-align:center;color:var(--muted)}
+    .episode-info{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 14px}.pill{border:1px solid var(--line);border-radius:999px;padding:5px 9px;background:var(--panel2)}.hint{color:var(--muted);margin-left:auto}
+    .curve-head{padding:13px 14px;border-bottom:1px solid var(--line);display:flex;align-items:end;gap:10px;flex-wrap:wrap}.curve-head h2{font-size:15px;margin:0 auto 7px 0}.legend{display:flex;gap:13px;color:var(--muted);font-size:12px}.dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px}.curve-status{padding:9px 14px;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line)}
+    .curves{display:grid;grid-template-columns:repeat(2,minmax(360px,1fr));gap:10px;padding:12px}.curve{background:#09141e;border:1px solid var(--line);border-radius:10px;overflow:hidden}.curve-title{display:flex;justify-content:space-between;gap:8px;padding:7px 10px;color:#cadbe9;font:12px ui-monospace,monospace}.curve-title small{color:var(--muted)}.curve-title span:last-child{color:var(--muted);text-align:right}canvas{display:block;width:100%;height:190px}.hidden{display:none!important}
+    @media(max-width:1050px){.videos,.curves{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.hint{width:100%;margin:0}}@media(max-width:600px){main{padding:12px}header{padding:14px}.stats{grid-template-columns:1fr 1fr}.grow{min-width:100%}.curves{padding:8px}.curve{min-width:0}}
+  </style>
+</head>
+<body>
+<header><h1>DataReplay · 数据集回放</h1><span id="health" class="status">连接中…</span></header>
+<main>
+  <section class="panel">
+    <div class="toolbar">
+      <label>任务<select id="category"></select></label>
+      <label>数据来源<select id="source"></select></label>
+      <label class="grow">数据集<select id="dataset" class="grow"></select></label>
+      <button id="refresh">刷新目录</button>
+    </div>
+    <div id="globalStats" class="stats"></div>
+  </section>
+  <section class="panel">
+    <div class="toolbar">
+      <button id="prev">← 上一个</button><button id="next">下一个 →</button>
+      <label>Episode<input id="episode" type="number" min="0" value="0"></label>
+      <label class="grow">Episode 列表<select id="episodeList" class="grow"></select></label>
+      <label class="grow">快速定位<input id="episodeSlider" type="range" min="0" value="0"></label>
+      <button id="load">加载</button>
+    </div>
+    <div id="datasetStats" class="stats"></div><div id="datasetPath" class="path"></div>
+  </section>
+  <section id="videos" class="videos"></section>
+  <section class="panel"><div id="episodeInfo" class="episode-info"><span class="hint">请选择 episode</span></div></section>
+  <section class="panel">
+    <div class="curve-head"><h2>关节曲线回放</h2>
+      <label>关节分组<select id="jointGroup"><option value="all">全部 38 关节</option><option value="left_arm">左臂</option><option value="right_arm">右臂</option><option value="left_hand">左手</option><option value="right_hand">右手</option></select></label>
+      <label>信号<select id="signal"><option value="both">State + Action</option><option value="state">仅 State</option><option value="action">仅 Action</option></select></label>
+      <label>纵轴尺度<select id="scaleMode"><option value="joint">每关节自适应</option><option value="episode">本 Episode 统一</option><option value="pi">固定 -π～π</option></select></label>
+      <label>搜索关节<input id="jointSearch" placeholder="如 index_j2"></label>
+      <div class="legend"><span><i class="dot" style="background:var(--green)"></i>state</span><span><i class="dot" style="background:var(--orange)"></i>action</span><span><i class="dot" style="background:#fff"></i>视频位置</span></div>
+    </div>
+    <div id="curveStatus" class="curve-status">加载 episode 后显示曲线</div><div id="curves" class="curves"></div>
+  </section>
+</main>
+<script>
+const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let datasets=[], summary={}, current=null, curveData=null, videos=[], master=null, loadToken=0;
+const api=async u=>{const r=await fetch(u);if(!r.ok)throw Error((await r.json().catch(()=>({error:r.statusText}))).error);return r.json()};
+const duration=s=>{s=Number(s)||0;const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=Math.floor(s%60);return h?`${h}时${String(m).padStart(2,'0')}分${String(x).padStart(2,'0')}秒`:`${m}分${String(x).padStart(2,'0')}秒`};
+const num=n=>Number(n||0).toLocaleString('zh-CN');
+function stat(label,value){return `<div class="stat"><span>${label}</span><b>${value}</b></div>`}
+function filtered(){return datasets.filter(d=>(!$('#category').value||d.category===$('#category').value)&&(!$('#source').value||d.source===$('#source').value))}
+async function refresh(force=false){try{const x=await api('/api/datasets'+(force?'?refresh=1':''));datasets=x.datasets;summary=x.summary;const oldCat=$('#category').value,oldSource=$('#source').value,oldId=$('#dataset').value;const cats=[...new Set(datasets.map(d=>d.category))];$('#category').innerHTML=cats.map(x=>`<option>${esc(x)}</option>`).join('');if(cats.includes(oldCat))$('#category').value=oldCat;fillSources(oldSource,oldId);$('#globalStats').innerHTML=stat('可回放数据集',num(summary.datasets))+stat('Episode 总数',num(summary.episodes))+stat('总帧数',num(summary.frames))+stat('总时长',duration(summary.duration_seconds))+stat('任务类别',num(summary.categories.length));$('#health').textContent=`在线 · ${summary.datasets} 个数据集`;$('#health').className='status'}catch(e){fail(e)}}
+function fillSources(oldSource='',oldId=''){const pool=datasets.filter(d=>d.category===$('#category').value),sources=[...new Set(pool.map(d=>d.source))];$('#source').innerHTML=sources.map(x=>`<option>${esc(x)}</option>`).join('');if(sources.includes(oldSource))$('#source').value=oldSource;fillDatasets(oldId)}
+function fillDatasets(oldId=''){const list=filtered();$('#dataset').innerHTML=list.map(d=>`<option value="${d.id}">${esc(d.date)} · ${d.episodes} episodes · ${duration(d.duration_seconds)}</option>`).join('');if(list.some(d=>d.id===oldId))$('#dataset').value=oldId;selectDataset()}
+async function selectDataset(){current=datasets.find(d=>d.id===$('#dataset').value);if(!current)return;const max=Math.max(0,current.episodes-1);$('#episode').max=$('#episodeSlider').max=max;$('#episode').value=$('#episodeSlider').value=Math.min(+$('#episode').value||0,max);$('#datasetStats').innerHTML=stat('Episodes',num(current.episodes))+stat('帧数',num(current.frames))+stat('FPS',current.fps)+stat('总时长',duration(current.duration_seconds))+stat('Episode 均值',duration(current.episode_duration.average));$('#datasetPath').textContent=current.path;try{const x=await api(`/api/datasets/${current.id}/episodes?limit=1000`);$('#episodeList').innerHTML=x.episodes.map(e=>`<option value="${e.episode_index}">Episode ${e.episode_index} · ${duration(e.duration_seconds)} · ${num(e.length)} 帧 · ${esc((e.tasks||[]).join(' / '))}</option>`).join('')}catch(e){$('#episodeList').innerHTML=''}await loadEpisode()}
+async function loadEpisode(){if(!current)return;const token=++loadToken,ep=Math.max(0,Math.min(+$('#episode').value||0,current.episodes-1));$('#episode').value=$('#episodeSlider').value=$('#episodeList').value=ep;stopVideos();$('#videos').innerHTML='<div class="video-card empty">视频加载中…</div>';$('#curves').innerHTML='';curveData=null;$('#curveStatus').textContent='关节数据加载中…';try{const detail=await api(`/api/datasets/${current.id}/episode/${ep}`);if(token!==loadToken)return;renderVideos(detail.videos);$('#episodeInfo').innerHTML=`<span class="pill">episode <b>${ep}</b> / ${current.episodes-1}</span><span class="pill">frames <b>${num(detail.length)}</b></span><span class="pill">时长 <b>${duration(detail.duration_seconds)}</b></span><span class="pill">FPS <b>${detail.fps}</b></span><span class="pill">任务 <b>${esc((detail.tasks||[]).join(' / ')||'—')}</b></span><span class="hint">首个视角为主时钟；空格播放/暂停，← → 切换 episode。</span>`;const curves=await api(detail.curves_url+'?max_points=1600');if(token!==loadToken)return;curveData=curves;$('#curveStatus').textContent=`原始 ${num(curves.original_points)} 帧，绘图采样 ${num(curves.sampled_points)} 点；白色游标与视频同步`;renderCurves()}catch(e){if(token!==loadToken)return;$('#videos').innerHTML=`<div class="video-card empty error">加载失败：${esc(e.message)}</div>`;$('#curveStatus').textContent=`曲线加载失败：${e.message}`}}
+function stopVideos(){videos.forEach(v=>{v.pause();v.removeAttribute('src');v.load()});videos=[];master=null}
+function renderVideos(items){const available=items.filter(x=>x.available);$('#videos').innerHTML=available.length?available.map((x,i)=>`<article class="video-card"><h2>${esc(x.label)} · ${esc((x.shape||[]).slice(0,2).join('×'))}</h2><video data-i="${i}" ${i?'muted':''} ${i?'':'controls'} preload="metadata" src="${x.url}"></video></article>`).join(''):'<div class="video-card empty">本 episode 没有可用视频</div>';videos=[...document.querySelectorAll('video')];master=videos[0]||null;if(!master)return;master.addEventListener('play',()=>videos.slice(1).forEach(v=>v.play().catch(()=>{})));master.addEventListener('pause',()=>videos.slice(1).forEach(v=>v.pause()));master.addEventListener('ratechange',()=>videos.slice(1).forEach(v=>v.playbackRate=master.playbackRate));master.addEventListener('timeupdate',()=>{videos.slice(1).forEach(v=>{if(Math.abs(v.currentTime-master.currentTime)>.09)v.currentTime=master.currentTime});drawCursors()});master.addEventListener('seeked',()=>{videos.slice(1).forEach(v=>v.currentTime=master.currentTime);drawCursors()})}
+function jointVisible(name,i){const g=$('#jointGroup').value,q=$('#jointSearch').value.trim().toLowerCase(),label=curveData.labels?.[i]||name;let ok=g==='all'||(g==='left_arm'&&name.startsWith('left_arm'))||(g==='right_arm'&&name.startsWith('right_arm'))||(g==='left_hand'&&name.startsWith('left_xhand'))||(g==='right_hand'&&name.startsWith('right_xhand'));return ok&&(!q||name.toLowerCase().includes(q)||label.toLowerCase().includes(q))}
+function renderCurves(){if(!curveData)return;const selected=curveData.names.map((name,i)=>({name,label:curveData.labels?.[i]||name,i})).filter(x=>jointVisible(x.name,x.i));$('#curves').innerHTML=selected.map(x=>`<div class="curve"><div class="curve-title"><span>${esc(x.label)} <small>(${esc(x.name)})</small></span><span id="value-${x.i}"></span></div><canvas data-joint="${x.i}"></canvas></div>`).join('')||'<div class="empty">没有匹配的关节</div>';requestAnimationFrame(drawCursors)}
+function drawCursors(){if(!curveData)return;document.querySelectorAll('canvas[data-joint]').forEach(canvas=>drawChart(canvas,+canvas.dataset.joint))}
+function globalRange(sig){const key='range_'+sig;if(curveData[key])return curveData[key];let lo=Infinity,hi=-Infinity,sets=[];if(sig!=='action')sets.push(curveData.state);if(sig!=='state')sets.push(curveData.action);sets.forEach(rows=>rows.forEach(row=>row.forEach(v=>{if(Number.isFinite(v)){lo=Math.min(lo,v);hi=Math.max(hi,v)}})));return curveData[key]=[lo,hi]}
+function tick(v,span){const a=Math.abs(span);return v.toFixed(a>=20?0:a>=4?1:a>=.4?2:3)}
+function drawChart(canvas,j){
+  const box=canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2),w=Math.max(300,box.width),h=190;
+  if(canvas.width!==Math.round(w*dpr)||canvas.height!==h*dpr){canvas.width=Math.round(w*dpr);canvas.height=h*dpr}
+  const c=canvas.getContext('2d'),L=51,R=10,T=12,B=29,pw=w-L-R,ph=h-T-B;c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);
+  const sig=$('#signal').value,series=[];if(sig!=='action'&&curveData.state.length)series.push({v:curveData.state.map(x=>x[j]),color:'#43ddb0'});if(sig!=='state'&&curveData.action.length)series.push({v:curveData.action.map(x=>x[j]),color:'#ffb15c'});
+  const vals=series.flatMap(s=>s.v).filter(Number.isFinite);if(!vals.length)return;let lo=Math.min(...vals),hi=Math.max(...vals),mode=$('#scaleMode').value;
+  if(mode==='episode')[lo,hi]=globalRange(sig);if(mode==='pi'){lo=-Math.PI;hi=Math.PI}if(hi===lo){lo-=.5;hi+=.5}if(mode!=='pi'){const pad=(hi-lo)*.06;lo-=pad;hi+=pad}
+  const ts=curveData.timestamps,t0=ts[0]||0,end=ts.at(-1)||1,span=Math.max(.001,end-t0),xAt=t=>L+(t-t0)/span*pw,yAt=v=>T+(hi-v)/(hi-lo)*ph;
+  c.font='10px system-ui';c.lineWidth=1;c.textBaseline='middle';
+  for(let k=0;k<=4;k++){const y=T+k*ph/4,v=hi-k*(hi-lo)/4;c.strokeStyle=k===4?'#486074':'#203444';c.beginPath();c.moveTo(L,y);c.lineTo(L+pw,y);c.stroke();c.fillStyle='#91a5b8';c.textAlign='right';c.fillText(tick(v,hi-lo),L-6,y)}
+  for(let k=0;k<=4;k++){const x=L+k*pw/4,t=t0+k*span/4;c.strokeStyle=k===0?'#486074':'#203444';c.beginPath();c.moveTo(x,T);c.lineTo(x,T+ph);c.stroke();c.fillStyle='#91a5b8';c.textAlign=k===0?'left':k===4?'right':'center';c.textBaseline='top';c.fillText(tick(t,span),x,T+ph+5)}
+  c.fillStyle='#91a5b8';c.textBaseline='top';c.textAlign='left';c.fillText('rad',4,2);c.textAlign='right';c.fillText('时间 (s)',w-7,h-14);
+  c.save();c.beginPath();c.rect(L,T,pw,ph);c.clip();series.forEach(s=>{c.strokeStyle=s.color;c.lineWidth=1.25;c.beginPath();let started=false;s.v.forEach((v,i)=>{if(!Number.isFinite(v))return;const x=xAt(ts[i]??(t0+i*span/(s.v.length-1||1))),y=yAt(v);started?c.lineTo(x,y):c.moveTo(x,y);started=true});c.stroke()});
+  const time=master?master.currentTime:0,x=Math.max(L,Math.min(L+pw,xAt(time)));c.strokeStyle='#fff';c.globalAlpha=.9;c.beginPath();c.moveTo(x,T);c.lineTo(x,T+ph);c.stroke();c.restore();c.globalAlpha=1;
+  let idx=ts.findIndex(v=>v>=time);if(idx<0)idx=ts.length-1;idx=Math.max(0,idx);const sv=curveData.state[idx]?.[j],av=curveData.action[idx]?.[j],el=$(`#value-${j}`);if(el)el.textContent=`S ${Number.isFinite(sv)?sv.toFixed(3):'—'} · A ${Number.isFinite(av)?av.toFixed(3):'—'} rad · 纵轴 ${tick(lo,hi-lo)}～${tick(hi,hi-lo)}`
+}
+function fail(e){$('#health').textContent=`服务异常：${e.message}`;$('#health').className='error'}
+$('#category').onchange=()=>fillSources();$('#source').onchange=()=>fillDatasets();$('#dataset').onchange=selectDataset;$('#refresh').onclick=()=>refresh(true);$('#load').onclick=loadEpisode;$('#episode').onchange=loadEpisode;$('#episodeList').onchange=e=>{$('#episode').value=e.target.value;loadEpisode()};$('#episodeSlider').oninput=e=>$('#episode').value=e.target.value;$('#episodeSlider').onchange=loadEpisode;$('#prev').onclick=()=>{if(+$('#episode').value>0){$('#episode').value=+$('#episode').value-1;loadEpisode()}};$('#next').onclick=()=>{if(current&&+$('#episode').value<current.episodes-1){$('#episode').value=+$('#episode').value+1;loadEpisode()}};$('#jointGroup').onchange=renderCurves;$('#signal').onchange=drawCursors;$('#scaleMode').onchange=drawCursors;$('#jointSearch').oninput=renderCurves;window.onresize=drawCursors;
+document.addEventListener('keydown',e=>{if(['INPUT','SELECT'].includes(e.target.tagName))return;if(e.key==='ArrowLeft')$('#prev').click();if(e.key==='ArrowRight')$('#next').click();if(e.key===' '&&master){e.preventDefault();master.paused?master.play():master.pause()}});window.addEventListener('error',e=>fail(e));refresh();
+</script>
+</body></html>

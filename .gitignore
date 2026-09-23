@@ -1,0 +1,12 @@
+runtime/
+.venv/
+__pycache__/
+*.py[cod]
+*.log
+*.pid
+*.bak*
+.env
+.env.*
+data/
+datasets/
+videos/
