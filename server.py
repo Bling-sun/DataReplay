@@ -122,8 +122,12 @@ class Catalog:
 
     def refresh(self) -> None:
         found: dict[str, Dataset] = {}
+        seen_paths: set[Path] = set()
         for source_index, source in enumerate(self.sources):
             for path in self._roots(source) or []:
+                real_path = path.resolve()
+                if real_path in seen_paths:
+                    continue
                 try:
                     info = json.loads((path / "meta/info.json").read_text())
                     episode_file = path / "meta/episodes.jsonl"
@@ -133,6 +137,7 @@ class Catalog:
                 identity = f"{source_index}\0{path.absolute()}"
                 dataset_id = hashlib.sha1(identity.encode()).hexdigest()[:14]
                 found[dataset_id] = Dataset(dataset_id, source, path.absolute(), info, episodes)
+                seen_paths.add(real_path)
         with self.lock:
             self.by_id = found
             self.last_scan = time.time()

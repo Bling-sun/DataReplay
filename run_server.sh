@@ -14,8 +14,7 @@ if (( $# == 0 )); then
   set -- \
     --source '快递分拣=LH217=/mnt/datasets/ExpressSorting_LH217' \
     --source '茶艺=LH214=/mnt/datasets/Tea_LH214' \
-    --source '双脑=LH210=/mnt/datasets/ExpressSorting_LH210' \
-    --source '双脑=清洗训练集=/mnt/sunbing/projects/RLinf_expresssorting_0904_0917_clean25hz'
+    --source '双脑=LH210=/mnt/datasets/ExpressSorting_LH210'
 fi
 exec "$python_bin" -u server.py \
   --host "${DATAREPLAY_HOST:-127.0.0.1}" \
