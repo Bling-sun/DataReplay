@@ -9,11 +9,12 @@
     header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:1px solid var(--line);background:#08131de8;backdrop-filter:blur(12px)}h1{font-size:19px;margin:0}.status{color:var(--green)}.error{color:var(--red)}
     main{padding:18px 24px 44px;max-width:1900px;margin:auto}.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-bottom:15px;overflow:hidden}.toolbar{display:flex;gap:11px;align-items:end;flex-wrap:wrap;padding:14px}.grow{flex:1;min-width:240px}
     label{display:grid;gap:5px;color:var(--muted);font-size:12px}select,input,button{height:38px;border:1px solid var(--line);border-radius:8px;background:#09141e;color:var(--text);padding:0 11px}select{max-width:460px}button{cursor:pointer}button:hover{border-color:var(--green)}input[type=range]{padding:0;min-width:220px}.stats{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:10px;padding:0 14px 14px}.stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}.stat span{display:block;color:var(--muted);font-size:11px}.stat b{font-size:17px;font-weight:650}.path{padding:0 14px 13px;color:var(--muted);font:12px ui-monospace,monospace;overflow-wrap:anywhere}
+    .category-heading{margin:0;padding:0 14px 10px;font-size:14px}.category-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.category-stats .stat b{display:block;margin:6px 0;color:var(--green)}.category-stats .stat small{color:var(--muted)}.category-note{margin:0;padding:0 14px 14px;color:var(--muted);font-size:12px}
     .videos{display:grid;grid-template-columns:2fr 1fr 1fr;gap:13px;margin-bottom:15px}.video-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}.video-card h2{font-size:13px;margin:0;padding:10px 13px;border-bottom:1px solid var(--line);color:#d2e3f1}.video-card video{display:block;width:100%;background:#000;aspect-ratio:4/3}.video-card:first-child video{aspect-ratio:16/9}.empty{padding:42px;text-align:center;color:var(--muted)}
     .episode-info{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 14px}.pill{border:1px solid var(--line);border-radius:999px;padding:5px 9px;background:var(--panel2)}.hint{color:var(--muted);margin-left:auto}
     .curve-head{padding:13px 14px;border-bottom:1px solid var(--line);display:flex;align-items:end;gap:10px;flex-wrap:wrap}.curve-head h2{font-size:15px;margin:0 auto 7px 0}.legend{display:flex;gap:13px;color:var(--muted);font-size:12px}.dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px}.curve-status{padding:9px 14px;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line)}
     .curves{display:grid;grid-template-columns:repeat(2,minmax(360px,1fr));gap:10px;padding:12px}.curve{background:#09141e;border:1px solid var(--line);border-radius:10px;overflow:hidden}.curve-title{display:flex;justify-content:space-between;gap:8px;padding:7px 10px;color:#cadbe9;font:12px ui-monospace,monospace}.curve-title small{color:var(--muted)}.curve-title span:last-child{color:var(--muted);text-align:right}canvas{display:block;width:100%;height:190px}.hidden{display:none!important}
-    @media(max-width:1050px){.videos,.curves{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.hint{width:100%;margin:0}}@media(max-width:600px){main{padding:12px}header{padding:14px}.stats{grid-template-columns:1fr 1fr}.grow{min-width:100%}.curves{padding:8px}.curve{min-width:0}}
+    @media(max-width:1050px){.videos,.curves{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.hint{width:100%;margin:0}}@media(max-width:600px){main{padding:12px}header{padding:14px}.stats{grid-template-columns:1fr 1fr}.grow{min-width:100%}.category-stats{grid-template-columns:1fr}.curves{padding:8px}.curve{min-width:0}}
   </style>
 </head>
 <body>
@@ -27,6 +28,9 @@
       <button id="refresh">刷新目录</button>
     </div>
     <div id="globalStats" class="stats"></div>
+    <h2 class="category-heading">各类别数据总时长</h2>
+    <div id="categoryStats" class="stats category-stats" aria-live="polite"></div>
+    <p class="category-note">统计全部数据来源，不随当前筛选变化；按每个数据集的帧数 ÷ FPS 累加，多视角视频不重复计时。</p>
   </section>
   <section class="panel">
     <div class="toolbar">
@@ -58,8 +62,21 @@ const api=async u=>{const r=await fetch(u);if(!r.ok)throw Error((await r.json().
 const duration=s=>{s=Number(s)||0;const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=Math.floor(s%60);return h?`${h}时${String(m).padStart(2,'0')}分${String(x).padStart(2,'0')}秒`:`${m}分${String(x).padStart(2,'0')}秒`};
 const num=n=>Number(n||0).toLocaleString('zh-CN');
 function stat(label,value){return `<div class="stat"><span>${label}</span><b>${value}</b></div>`}
+function renderCategoryStats(){
+  const totals=new Map(['茶艺','双脑','快递分拣'].map(category=>[category,{seconds:0,datasets:0,episodes:0}]));
+  for(const dataset of datasets){
+    const total=totals.get(dataset.category);
+    if(!total)continue;
+    total.seconds+=Number(dataset.duration_seconds)||0;
+    total.datasets++;
+    total.episodes+=Number(dataset.episodes)||0;
+  }
+  $('#categoryStats').innerHTML=[...totals].map(([category,total])=>
+    `<div class="stat"><span>${esc(category)}</span><b>${duration(total.seconds)}</b><small>${(total.seconds/3600).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})} 小时 · ${num(total.datasets)} 个数据集 · ${num(total.episodes)} 个 Episode</small></div>`
+  ).join('');
+}
 function filtered(){return datasets.filter(d=>(!$('#category').value||d.category===$('#category').value)&&(!$('#source').value||d.source===$('#source').value))}
-async function refresh(force=false){try{const x=await api('/api/datasets'+(force?'?refresh=1':''));datasets=x.datasets;summary=x.summary;const oldCat=$('#category').value,oldSource=$('#source').value,oldId=$('#dataset').value;const cats=[...new Set(datasets.map(d=>d.category))];$('#category').innerHTML=cats.map(x=>`<option>${esc(x)}</option>`).join('');if(cats.includes(oldCat))$('#category').value=oldCat;fillSources(oldSource,oldId);$('#globalStats').innerHTML=stat('可回放数据集',num(summary.datasets))+stat('Episode 总数',num(summary.episodes))+stat('总帧数',num(summary.frames))+stat('总时长',duration(summary.duration_seconds))+stat('任务类别',num(summary.categories.length));$('#health').textContent=`在线 · ${summary.datasets} 个数据集`;$('#health').className='status'}catch(e){fail(e)}}
+async function refresh(force=false){try{const x=await api('/api/datasets'+(force?'?refresh=1':''));datasets=x.datasets;summary=x.summary;renderCategoryStats();const oldCat=$('#category').value,oldSource=$('#source').value,oldId=$('#dataset').value;const cats=[...new Set(datasets.map(d=>d.category))];$('#category').innerHTML=cats.map(x=>`<option>${esc(x)}</option>`).join('');if(cats.includes(oldCat))$('#category').value=oldCat;fillSources(oldSource,oldId);$('#globalStats').innerHTML=stat('可回放数据集',num(summary.datasets))+stat('Episode 总数',num(summary.episodes))+stat('总帧数',num(summary.frames))+stat('总时长',duration(summary.duration_seconds))+stat('任务类别',num(summary.categories.length));$('#health').textContent=`在线 · ${summary.datasets} 个数据集`;$('#health').className='status'}catch(e){fail(e)}}
 function fillSources(oldSource='',oldId=''){const pool=datasets.filter(d=>d.category===$('#category').value),sources=[...new Set(pool.map(d=>d.source))];$('#source').innerHTML=sources.map(x=>`<option>${esc(x)}</option>`).join('');if(sources.includes(oldSource))$('#source').value=oldSource;fillDatasets(oldId)}
 function fillDatasets(oldId=''){const list=filtered();$('#dataset').innerHTML=list.map(d=>`<option value="${d.id}">${esc(d.date)} · ${d.episodes} episodes · ${duration(d.duration_seconds)}</option>`).join('');if(list.some(d=>d.id===oldId))$('#dataset').value=oldId;selectDataset()}
 async function selectDataset(){current=datasets.find(d=>d.id===$('#dataset').value);if(!current)return;const max=Math.max(0,current.episodes-1);$('#episode').max=$('#episodeSlider').max=max;$('#episode').value=$('#episodeSlider').value=Math.min(+$('#episode').value||0,max);$('#datasetStats').innerHTML=stat('Episodes',num(current.episodes))+stat('帧数',num(current.frames))+stat('FPS',current.fps)+stat('总时长',duration(current.duration_seconds))+stat('Episode 均值',duration(current.episode_duration.average));$('#datasetPath').textContent=current.path;try{const x=await api(`/api/datasets/${current.id}/episodes?limit=1000`);$('#episodeList').innerHTML=x.episodes.map(e=>`<option value="${e.episode_index}">Episode ${e.episode_index} · ${duration(e.duration_seconds)} · ${num(e.length)} 帧 · ${esc((e.tasks||[]).join(' / '))}</option>`).join('')}catch(e){$('#episodeList').innerHTML=''}await loadEpisode()}
